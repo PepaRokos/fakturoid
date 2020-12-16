@@ -1,44 +1,82 @@
-use crate::models::Subject;
-use serde::Serialize;
-use chrono::NaiveDateTime;
+use crate::error::{FakturoidError, UnknownError};
+use crate::models::{Invoice, InvoiceState, Subject};
+use chrono::{DateTime, Local};
 use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
-use std::collections::{HashMap, BTreeMap};
 use serde::export::Option::Some;
-use crate::error::{ApiRequestError, UnknownError};
+use serde::Serialize;
+use std::collections::HashMap;
 
 pub trait Entity {
     fn url_part() -> &'static str;
-    fn filter() -> Box<dyn Filter>;
+    fn filter_builder() -> Box<dyn FilterBuilder>;
 }
 
-pub trait Filter {
-    fn params(&self, builder: FilterBuilder) -> BTreeMap<String, String>;
+pub trait FilterBuilder {
+    fn build(&self, builder: Filter) -> HashMap<String, String>;
 }
 
 #[derive(Default, Clone)]
-pub struct FilterBuilder {
-    query_map: BTreeMap<String, String>
+pub struct Filter {
+    query_map: HashMap<String, String>,
 }
 
-impl FilterBuilder {
+impl Filter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn page(mut self, page: i32) -> Self {
-        self.query_map.insert("page".to_string(), format!("{}", page));
+        self.query_map
+            .insert("page".to_string(), format!("{}", page));
         self
     }
 
-    pub fn since(mut self, since: NaiveDateTime) -> Self {
-        self.query_map.insert("since".to_string(), since.format("%Y-%m-%dT%H:%M:%S").to_string());
+    pub fn since(mut self, since: DateTime<Local>) -> Self {
+        self.query_map
+            .insert("since".to_string(), since.to_rfc3339());
         self
     }
 
-    pub fn updated_since(mut self, upd_since: NaiveDateTime) -> Self {
-        self.query_map.insert("updated_since".to_string(), upd_since.format("%Y-%m-%dT%H:%M:%S").to_string());
+    pub fn updated_since(mut self, upd_since: DateTime<Local>) -> Self {
+        self.query_map
+            .insert("updated_since".to_string(), upd_since.to_rfc3339());
         self
     }
 
     pub fn custom_id(mut self, custom_id: &str) -> Self {
-        self.query_map.insert("custom_id".to_string(), custom_id.to_string());
+        self.query_map
+            .insert("custom_id".to_string(), custom_id.to_string());
+        self
+    }
+
+    pub fn until(mut self, until: DateTime<Local>) -> Self {
+        self.query_map
+            .insert("until".to_string(), until.to_rfc3339());
+        self
+    }
+
+    pub fn updated_until(mut self, upd_until: DateTime<Local>) -> Self {
+        self.query_map
+            .insert("updated_until".to_string(), upd_until.to_rfc3339());
+        self
+    }
+
+    pub fn number(mut self, number: &str) -> Self {
+        self.query_map
+            .insert("number".to_string(), number.to_string());
+        self
+    }
+
+    pub fn status(mut self, status: InvoiceState) -> Self {
+        self.query_map
+            .insert("status".to_string(), status.to_string());
+        self
+    }
+
+    pub fn subject_id(mut self, id: i32) -> Self {
+        self.query_map
+            .insert("subject_id".to_string(), format!("{}", id));
         self
     }
 
@@ -47,11 +85,28 @@ impl FilterBuilder {
     }
 }
 
-#[derive(Default)]
 struct SubjectFilter;
+struct InvoiceFilter;
 
-impl Filter for SubjectFilter {
-    fn params(&self, builder: FilterBuilder) -> BTreeMap<String, String> {
+impl FilterBuilder for SubjectFilter {
+    fn build(&self, builder: Filter) -> HashMap<String, String> {
+        builder
+            .query_map
+            .iter()
+            .filter(|&f| {
+                *f.0 != "subject_id"
+                    && *f.0 != "until"
+                    && *f.0 != "updated_until"
+                    && *f.0 != "number"
+                    && *f.0 != "status"
+            })
+            .map(|f| (f.0.clone(), f.1.clone()))
+            .collect()
+    }
+}
+
+impl FilterBuilder for InvoiceFilter {
+    fn build(&self, builder: Filter) -> HashMap<String, String> {
         builder.query_map
     }
 }
@@ -61,29 +116,37 @@ impl Entity for Subject {
         "subjects"
     }
 
-    fn filter() -> Box<dyn Filter> {
-        Box::new(SubjectFilter::default())
+    fn filter_builder() -> Box<dyn FilterBuilder> {
+        Box::new(SubjectFilter)
+    }
+}
+
+impl Entity for Invoice {
+    fn url_part() -> &'static str {
+        "invoices"
+    }
+
+    fn filter_builder() -> Box<dyn FilterBuilder> {
+        Box::new(InvoiceFilter)
     }
 }
 
 pub struct PagedResponse<T: Entity + DeserializeOwned> {
     collection: Vec<T>,
     client: Fakturoid,
-    links: HashMap<String, String>
+    links: HashMap<String, String>,
 }
 
 impl<T: Entity + DeserializeOwned> PagedResponse<T> {
-    fn new(collection: Vec<T>,
-           client: Fakturoid,
-           links: HashMap<String, String>) -> Self {
+    fn new(collection: Vec<T>, client: Fakturoid, links: HashMap<String, String>) -> Self {
         Self {
             collection,
             client,
-            links
+            links,
         }
     }
 
-    async fn page(self, page: &str) -> Result<PagedResponse<T>, ApiRequestError> {
+    async fn page(self, page: &str) -> Result<PagedResponse<T>, FakturoidError> {
         if let Some(url) = self.links.get(page) {
             Ok(self.client.get_url(url.as_str(), None).await?)
         } else {
@@ -95,19 +158,19 @@ impl<T: Entity + DeserializeOwned> PagedResponse<T> {
         &self.collection
     }
 
-    pub async fn first_page(self) -> Result<PagedResponse<T>, ApiRequestError> {
+    pub async fn first_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("first").await?)
     }
 
-    pub async fn prev_page(self) -> Result<PagedResponse<T>, ApiRequestError> {
+    pub async fn prev_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("prev").await?)
     }
 
-    pub async fn next_page(self) -> Result<PagedResponse<T>, ApiRequestError> {
+    pub async fn next_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("next").await?)
     }
 
-    pub async fn last_page(self) -> Result<PagedResponse<T>, ApiRequestError> {
+    pub async fn last_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("last").await?)
     }
 
@@ -126,20 +189,23 @@ pub struct Fakturoid {
     password: String,
     slug: String,
     user_agent: Option<String>,
-    client: Client
+    client: Client,
 }
 
 impl Fakturoid {
-    pub fn new(user: &str,
-               password: &str,
-               slug: &str,
-               user_agent: Option<&str>) -> Self {
+    pub fn new(user: &str, password: &str, slug: &str, user_agent: Option<&str>) -> Self {
         Self {
             user: user.to_string(),
             password: password.to_string(),
             slug: slug.to_string(),
-            user_agent: {if let Some(ua) = user_agent {Some(ua.to_string())} else { None }},
-            client: Client::new()
+            user_agent: {
+                if let Some(ua) = user_agent {
+                    Some(ua.to_string())
+                } else {
+                    None
+                }
+            },
+            client: Client::new(),
         }
     }
 
@@ -159,13 +225,20 @@ impl Fakturoid {
         }
     }
 
-    async fn paged_response<T>(&self, response: Response) -> Result<PagedResponse<T>, ApiRequestError>
-        where
-            T: Entity + DeserializeOwned
+    async fn paged_response<T>(
+        &self,
+        response: Response,
+    ) -> Result<PagedResponse<T>, FakturoidError>
+    where
+        T: Entity + DeserializeOwned,
     {
         if let Some(link) = response.headers().get("Link") {
             let mut links = HashMap::<String, String>::new();
-            for lnk in link.to_str().map_err(ApiRequestError::from_std_err)?.split(",") {
+            for lnk in link
+                .to_str()
+                .map_err(FakturoidError::from_std_err)?
+                .split(",")
+            {
                 let parts: Vec<_> = lnk.split(";").collect();
                 if parts.len() == 2 {
                     let key = parts[1][4..parts[1].len() - 1].trim();
@@ -173,99 +246,147 @@ impl Fakturoid {
                     links.insert(key.to_string(), val.to_string());
                 }
             }
-            Ok(PagedResponse::new(response.json::<Vec<T>>().await?, self.clone(), links))
+            Ok(PagedResponse::new(
+                response.json::<Vec<T>>().await?,
+                self.clone(),
+                links,
+            ))
         } else {
-            Ok(PagedResponse::new(response.json::<Vec<T>>().await?, self.clone(), HashMap::<String, String>::new()))
+            Ok(PagedResponse::new(
+                response.json::<Vec<T>>().await?,
+                self.clone(),
+                HashMap::<String, String>::new(),
+            ))
         }
     }
 
-    async fn get_url<T>(&self, url: &str, filter: Option<BTreeMap<String, String>>) -> Result<PagedResponse<T>, ApiRequestError>
+    async fn get_url<T>(
+        &self,
+        url: &str,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<PagedResponse<T>, FakturoidError>
     where
-        T: Entity + DeserializeOwned
+        T: Entity + DeserializeOwned,
     {
         let resp = if let Some(flt) = filter {
-            self.client.get(url)
+            self.client
+                .get(url)
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
                 .header("User-Agent", self.user_agent())
                 .query(&flt)
-                .send().await?
-        }else {
-            self.client.get(url)
+                .send()
+                .await?
+        } else {
+            self.client
+                .get(url)
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
                 .header("User-Agent", self.user_agent())
-                .send().await?
+                .send()
+                .await?
         };
 
-        Ok(self.paged_response(resp).await?)
+        self.paged_response(resp).await
     }
 
-    pub async fn detail<T>(&self, id: i32) -> Result<T, ApiRequestError>
-    where
-        T: Entity + DeserializeOwned
+    async fn evaluate_response<T>(&self, response: Response) -> Result<T, FakturoidError>
+        where
+            T: Entity + DeserializeOwned,
     {
-        let resp = self.client.get(&self.url_with_id(T::url_part(), id))
-            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
-            .header("User-Agent", self.user_agent())
-            .send().await?
-            .json::<T>().await?;
-        Ok(resp)
-    }
-
-    pub async fn update<T>(&self, id: i32, entity: &T) -> Result<T, ApiRequestError>
-    where
-        T: Entity + Serialize + DeserializeOwned
-    {
-        let send_resp = self.client.patch(&self.url_with_id(T::url_part(), id))
-            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
-            .header("User-Agent", self.user_agent())
-            .json(entity)
-            .send().await?;
-        if send_resp.status().is_success() {
-            Ok(send_resp.json::<T>().await?)
+        if response.status().is_success() {
+            Ok(response.json::<T>().await?)
         } else {
-            let err = if let Err(e) = send_resp.error_for_status_ref() {
-                ApiRequestError::from_data(send_resp.json().await?, e)
+            let err = if let Err(e) = response.error_for_status_ref() {
+                if response.status() == 422 {
+                    FakturoidError::from_data(response.json().await?, e)
+                } else {
+                    e.into()
+                }
             } else {
-                ApiRequestError::from_std_err(UnknownError::new("update<T>()"))
+                FakturoidError::from_std_err(UnknownError::new("evaluate_response<T>()"))
             };
 
             Err(err)
         }
     }
 
-    pub async fn delete<T>(&self, id: i32) -> Result<(), ApiRequestError>
+    pub async fn detail<T>(&self, id: i32) -> Result<T, FakturoidError>
     where
-        T: Entity
+        T: Entity + DeserializeOwned,
     {
-        self.client.delete(&self.url_with_id(T::url_part(), id))
+        self.evaluate_response(self
+            .client
+            .get(&self.url_with_id(T::url_part(), id))
             .basic_auth(self.user.as_str(), Some(self.password.as_str()))
             .header("User-Agent", self.user_agent())
-            .send().await?;
+            .send()
+            .await?
+        ).await
+    }
+
+    pub async fn update<T>(&self, id: i32, entity: &T) -> Result<T, FakturoidError>
+    where
+        T: Entity + Serialize + DeserializeOwned,
+    {
+        self.evaluate_response(
+            self.client
+                .patch(&self.url_with_id(T::url_part(), id))
+                .basic_auth(self.user.as_str(), Some(self.password.as_str()))
+                .header("User-Agent", self.user_agent())
+                .json(entity)
+                .send()
+                .await?,
+        ).await
+    }
+
+    pub async fn delete<T>(&self, id: i32) -> Result<(), FakturoidError>
+    where
+        T: Entity,
+    {
+        self.client
+            .delete(&self.url_with_id(T::url_part(), id))
+            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
+            .header("User-Agent", self.user_agent())
+            .send()
+            .await?;
         Ok(())
     }
 
-    pub async fn create<T>(&self, entity: &T) -> Result<T, ApiRequestError>
+    pub async fn create<T>(&self, entity: &T) -> Result<T, FakturoidError>
     where
-        T: Entity + Serialize + DeserializeOwned
+        T: Entity + Serialize + DeserializeOwned,
     {
-        let resp = self.client.post(&format!("{}{}.json", self.url_first(), T::url_part()))
-            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
-            .header("User-Agent", self.user_agent())
-            .json(entity)
-            .send().await?
-            .json::<T>().await?;
-        Ok(resp)
+        self.evaluate_response(
+            self.client
+                .post(&format!("{}{}.json", self.url_first(), T::url_part()))
+                .basic_auth(self.user.as_str(), Some(self.password.as_str()))
+                .header("User-Agent", self.user_agent())
+                .json(entity)
+                .send()
+                .await?,
+        ).await
     }
 
-    pub async fn list<T>(&self, filter_builder: Option<FilterBuilder>) -> Result<PagedResponse<T>, ApiRequestError>
+    pub async fn list<T>(
+        &self,
+        filter_builder: Option<Filter>,
+    ) -> Result<PagedResponse<T>, FakturoidError>
     where
-        T: Entity + DeserializeOwned
+        T: Entity + DeserializeOwned,
     {
         let filter = if let Some(builder) = filter_builder {
             if !builder.is_empty() {
-                Some(T::filter().params(builder))
-            } else { None }
-        } else { None };
-        Ok(self.get_url(format!("{}{}.json", self.url_first(), T::url_part()).as_str(), filter).await?)
+                Some(T::filter_builder().build(builder))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        Ok(self
+            .get_url(
+                format!("{}{}.json", self.url_first(), T::url_part()).as_str(),
+                filter,
+            )
+            .await?)
     }
 }
