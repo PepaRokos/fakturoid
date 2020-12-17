@@ -1,6 +1,7 @@
 pub mod models;
 pub mod client;
 pub mod error;
+pub mod filters;
 
 #[cfg(test)]
 mod tests {
