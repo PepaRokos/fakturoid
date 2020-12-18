@@ -1,11 +1,11 @@
 use crate::error::{FakturoidError, UnknownError};
+use crate::filters::{Filter, FilterBuilder, InvoiceFilter, SubjectFilter};
 use crate::models::{Invoice, Subject};
 use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
 use serde::export::Option::Some;
 use serde::Serialize;
 use std::collections::HashMap;
-use crate::filters::{FilterBuilder, SubjectFilter, InvoiceFilter, Filter};
 
 pub trait Entity {
     fn url_part() -> &'static str;
@@ -122,7 +122,7 @@ impl Fakturoid {
         if let Some(ua) = self.user_agent.as_ref() {
             ua.clone()
         } else {
-            "Rust API client".to_string()
+            "Rust API client (pepa@bukova.info)".to_string()
         }
     }
 
@@ -190,8 +190,8 @@ impl Fakturoid {
     }
 
     async fn evaluate_response<T>(&self, response: Response) -> Result<T, FakturoidError>
-        where
-            T: Entity + DeserializeOwned,
+    where
+        T: Entity + DeserializeOwned,
     {
         if response.status().is_success() {
             Ok(response.json::<T>().await?)
@@ -214,14 +214,15 @@ impl Fakturoid {
     where
         T: Entity + DeserializeOwned,
     {
-        self.evaluate_response(self
-            .client
-            .get(&self.url_with_id(T::url_part(), id))
-            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
-            .header("User-Agent", self.user_agent())
-            .send()
-            .await?
-        ).await
+        self.evaluate_response(
+            self.client
+                .get(&self.url_with_id(T::url_part(), id))
+                .basic_auth(self.user.as_str(), Some(self.password.as_str()))
+                .header("User-Agent", self.user_agent())
+                .send()
+                .await?,
+        )
+        .await
     }
 
     pub async fn update<T>(&self, id: i32, entity: &T) -> Result<T, FakturoidError>
@@ -236,7 +237,8 @@ impl Fakturoid {
                 .json(entity)
                 .send()
                 .await?,
-        ).await
+        )
+        .await
     }
 
     pub async fn delete<T>(&self, id: i32) -> Result<(), FakturoidError>
@@ -264,13 +266,11 @@ impl Fakturoid {
                 .json(entity)
                 .send()
                 .await?,
-        ).await
+        )
+        .await
     }
 
-    pub async fn list<T>(
-        &self,
-        filter: Option<Filter>,
-    ) -> Result<PagedResponse<T>, FakturoidError>
+    pub async fn list<T>(&self, filter: Option<Filter>) -> Result<PagedResponse<T>, FakturoidError>
     where
         T: Entity + DeserializeOwned,
     {
@@ -283,11 +283,25 @@ impl Fakturoid {
         } else {
             None
         };
-        Ok(self
-            .get_url(
-                format!("{}{}.json", self.url_first(), T::url_part()).as_str(),
-                filter,
-            )
-            .await?)
+        self.get_url(
+            format!("{}{}.json", self.url_first(), T::url_part()).as_str(),
+            filter,
+        )
+        .await
+    }
+
+    pub async fn fulltext<T>(&self, search: &str) -> Result<PagedResponse<T>, FakturoidError>
+    where
+        T: Entity + DeserializeOwned,
+    {
+        let query_map: HashMap<String, String> = [("query".to_string(), search.to_string())]
+            .iter()
+            .map(|q| (q.0.clone(), q.1.clone()))
+            .collect();
+        self.get_url(
+            format!("{}{}/search.json", self.url_first(), T::url_part()).as_str(),
+            Some(query_map),
+        )
+        .await
     }
 }
