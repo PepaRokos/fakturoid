@@ -5,6 +5,53 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VatMode {
+    VatPayer,
+    NonVatPayer,
+    IdentifiedPerson
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Account {
+    pub subdomain: String,
+    pub plan: String,
+    pub plan_price: i32,
+    pub email: String,
+    pub invoice_email: Option<String>,
+    pub phone: Option<String>,
+    pub web: Option<String>,
+    pub name: String,
+    pub full_name: Option<String>,
+    pub registration_no: Option<String>,
+    pub vat_no: Option<String>,
+    pub vat_mode: VatMode,
+    pub vat_price_mode: VatPriceMode,
+    pub street: String,
+    pub street2: Option<String>,
+    pub city: String,
+    pub zip: String,
+    pub country: String,
+    pub bank_account: String,
+    pub iban: Option<String>,
+    pub swift_bic: Option<String>,
+    pub currency: String,
+    pub unit_name: Option<String>,
+    pub vat_rate: i32,
+    pub displayed_note: Option<String>,
+    pub invoice_note: Option<String>,
+    pub due: i32,
+    pub custom_email_text: String,
+    pub overdue_email_text: String,
+    pub invoice_paypal: bool,
+    pub invoice_gopay: bool,
+    pub html_url: String,
+    pub url: String,
+    pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubjectType {

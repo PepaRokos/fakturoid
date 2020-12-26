@@ -1,6 +1,6 @@
 use crate::error::{DataErrors, FakturoidError, UnknownError};
-use crate::filters::{Filter, FilterBuilder, InvoiceFilter, SubjectFilter};
-use crate::models::{Invoice, InvoiceAction, Subject};
+use crate::filters::{Filter, FilterBuilder, InvoiceFilter, SubjectFilter, NoneFilter};
+use crate::models::{Invoice, InvoiceAction, Subject, Account};
 use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
 use serde::export::Option::Some;
@@ -15,6 +15,16 @@ pub trait Entity {
 pub trait Action: ToString {
     fn url_part() -> &'static str;
     fn query(&self) -> HashMap<String, String>;
+}
+
+impl Entity for Account {
+    fn url_part() -> &'static str {
+        "account"
+    }
+
+    fn filter_builder() -> Box<dyn FilterBuilder> {
+        Box::new(NoneFilter)
+    }
 }
 
 impl Entity for Subject {
@@ -240,20 +250,34 @@ impl Fakturoid {
             Err(Self::error_response(response).await)
         }
     }
-
-    pub async fn detail<T>(&self, id: i32) -> Result<T, FakturoidError>
-    where
+    async fn detail_private<T>(&self, id: Option<i32>) -> Result<T, FakturoidError> where
         T: Entity + DeserializeOwned,
     {
+        let url = if let Some(id) = id {
+            self.url_with_id(T::url_part(), id)
+        } else {
+            format!("{}{}.json", self.url_first(), T::url_part())
+        };
         Self::evaluate_response(
             self.client
-                .get(&self.url_with_id(T::url_part(), id))
+                .get(&url)
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
                 .header("User-Agent", self.user_agent())
                 .send()
                 .await?,
         )
-        .await
+            .await
+    }
+
+    pub async fn detail<T>(&self, id: i32) -> Result<T, FakturoidError>
+    where
+        T: Entity + DeserializeOwned,
+    {
+        self.detail_private(Some(id)).await
+    }
+
+    pub async fn account(&self) -> Result<Account, FakturoidError> {
+        self.detail_private(None).await
     }
 
     pub async fn update<T>(&self, id: i32, entity: &T) -> Result<T, FakturoidError>

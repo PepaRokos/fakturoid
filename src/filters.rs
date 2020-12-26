@@ -75,8 +75,15 @@ impl Filter {
     }
 }
 
+pub(crate) struct NoneFilter;
 pub(crate) struct SubjectFilter;
 pub(crate) struct InvoiceFilter;
+
+impl FilterBuilder for NoneFilter {
+    fn build(&self, _filter: Filter) -> HashMap<String, String> {
+        HashMap::new()
+    }
+}
 
 impl FilterBuilder for SubjectFilter {
     fn build(&self, filter: Filter) -> HashMap<String, String> {
