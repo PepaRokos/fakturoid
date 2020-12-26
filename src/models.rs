@@ -422,3 +422,47 @@ impl Invoice {
         }
     }
 }
+
+#[derive(Serialize)]
+pub struct InvoicePayData {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paid_at: Option<DateTime<Local>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paid_amount: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variable_symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bank_account_id: Option<i32>
+}
+
+pub enum InvoiceAction {
+    MarkAsSent,
+    Deliver,
+    Pay,
+    PayProforma,
+    PayPartialProforma,
+    RemovePayment,
+    DeliverReminder,
+    Cancel,
+    UndoCancel,
+    Lock,
+    Unlock
+}
+
+impl ToString for InvoiceAction {
+    fn to_string(&self) -> String {
+        match self {
+            InvoiceAction::MarkAsSent => { "mark_as_sent" }
+            InvoiceAction::Deliver => { "deliver" }
+            InvoiceAction::Pay => { "pay" }
+            InvoiceAction::PayProforma => { "pay_proforma" }
+            InvoiceAction::PayPartialProforma => { "pay_partial_proforma" }
+            InvoiceAction::RemovePayment => { "remove_payment" }
+            InvoiceAction::DeliverReminder => { "deliver_reminder" }
+            InvoiceAction::Cancel => { "cancel" }
+            InvoiceAction::UndoCancel => { "undo_cancel" }
+            InvoiceAction::Lock => { "lock" }
+            InvoiceAction::Unlock => { "unlock" }
+        }.to_string()
+    }
+}

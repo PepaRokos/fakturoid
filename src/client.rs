@@ -1,6 +1,6 @@
-use crate::error::{FakturoidError, UnknownError};
+use crate::error::{DataErrors, FakturoidError, UnknownError};
 use crate::filters::{Filter, FilterBuilder, InvoiceFilter, SubjectFilter};
-use crate::models::{Invoice, Subject};
+use crate::models::{Invoice, InvoiceAction, Subject};
 use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
 use serde::export::Option::Some;
@@ -10,6 +10,11 @@ use std::collections::HashMap;
 pub trait Entity {
     fn url_part() -> &'static str;
     fn filter_builder() -> Box<dyn FilterBuilder>;
+}
+
+pub trait Action: ToString {
+    fn url_part() -> &'static str;
+    fn query(&self) -> HashMap<String, String>;
 }
 
 impl Entity for Subject {
@@ -81,6 +86,19 @@ impl<T: Entity + DeserializeOwned> PagedResponse<T> {
 
     pub fn has_prev(&self) -> bool {
         self.links.contains_key("prev")
+    }
+}
+
+impl Action for InvoiceAction {
+    fn url_part() -> &'static str {
+        "invoices"
+    }
+
+    fn query(&self) -> HashMap<String, String> {
+        [("event", self.to_string())]
+            .iter()
+            .map(|q| (q.0.to_string(), q.1.clone()))
+            .collect()
     }
 }
 
@@ -189,24 +207,37 @@ impl Fakturoid {
         self.paged_response(resp).await
     }
 
-    async fn evaluate_response<T>(&self, response: Response) -> Result<T, FakturoidError>
+    async fn error_response(response: Response) -> FakturoidError {
+        if let Err(e) = response.error_for_status_ref() {
+            if response.status() == 422 {
+                match response.json::<DataErrors>().await {
+                    Ok(data) => FakturoidError::from_data(data, e),
+                    Err(err) => FakturoidError::from_std_err(err),
+                }
+            } else {
+                e.into()
+            }
+        } else {
+            FakturoidError::from_std_err(UnknownError::new("evaluate_response<T>()"))
+        }
+    }
+
+    async fn evaluate_response<T>(response: Response) -> Result<T, FakturoidError>
     where
         T: Entity + DeserializeOwned,
     {
         if response.status().is_success() {
             Ok(response.json::<T>().await?)
         } else {
-            let err = if let Err(e) = response.error_for_status_ref() {
-                if response.status() == 422 {
-                    FakturoidError::from_data(response.json().await?, e)
-                } else {
-                    e.into()
-                }
-            } else {
-                FakturoidError::from_std_err(UnknownError::new("evaluate_response<T>()"))
-            };
+            Err(Self::error_response(response).await)
+        }
+    }
 
-            Err(err)
+    async fn evaluate(response: Response) -> Result<(), FakturoidError> {
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(Self::error_response(response).await)
         }
     }
 
@@ -214,7 +245,7 @@ impl Fakturoid {
     where
         T: Entity + DeserializeOwned,
     {
-        self.evaluate_response(
+        Self::evaluate_response(
             self.client
                 .get(&self.url_with_id(T::url_part(), id))
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
@@ -229,7 +260,7 @@ impl Fakturoid {
     where
         T: Entity + Serialize + DeserializeOwned,
     {
-        self.evaluate_response(
+        Self::evaluate_response(
             self.client
                 .patch(&self.url_with_id(T::url_part(), id))
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
@@ -245,20 +276,22 @@ impl Fakturoid {
     where
         T: Entity,
     {
-        self.client
-            .delete(&self.url_with_id(T::url_part(), id))
-            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
-            .header("User-Agent", self.user_agent())
-            .send()
-            .await?;
-        Ok(())
+        Self::evaluate(
+            self.client
+                .delete(&self.url_with_id(T::url_part(), id))
+                .basic_auth(self.user.as_str(), Some(self.password.as_str()))
+                .header("User-Agent", self.user_agent())
+                .send()
+                .await?,
+        )
+        .await
     }
 
     pub async fn create<T>(&self, entity: &T) -> Result<T, FakturoidError>
     where
         T: Entity + Serialize + DeserializeOwned,
     {
-        self.evaluate_response(
+        Self::evaluate_response(
             self.client
                 .post(&format!("{}{}.json", self.url_first(), T::url_part()))
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
@@ -303,5 +336,30 @@ impl Fakturoid {
             Some(query_map),
         )
         .await
+    }
+
+    pub async fn action<T: Action, D: Serialize>(
+        &self,
+        id: i32,
+        action: T,
+        data: Option<D>,
+    ) -> Result<(), FakturoidError> {
+        let req = self
+            .client
+            .post(&format!(
+                "{}{}/{}/fire.json",
+                self.url_first(),
+                T::url_part(),
+                id
+            ))
+            .basic_auth(self.user.as_str(), Some(self.password.as_str()))
+            .header("User-Agent", self.user_agent())
+            .query(&action.query());
+        let req = if let Some(d) = data {
+            req.query(&d)
+        } else {
+            req
+        };
+        Self::evaluate(req.send().await?).await
     }
 }
