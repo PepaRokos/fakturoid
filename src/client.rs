@@ -170,9 +170,9 @@ impl Fakturoid {
             {
                 let parts: Vec<_> = lnk.split(";").collect();
                 if parts.len() == 2 {
-                    let key = parts[1][4..parts[1].len() - 1].trim();
+                    let key = parts[1][6..parts[1].len() - 1].trim();
                     let val = parts[0][1..parts[0].len() - 1].trim();
-                    links.insert(key.to_string(), val.to_string());
+                    links.insert(key.to_string(), val.replace("<", ""));
                 }
             }
             Ok(PagedResponse::new(
@@ -280,7 +280,7 @@ impl Fakturoid {
         self.detail_private(None).await
     }
 
-    pub async fn update<T>(&self, id: i32, entity: &T) -> Result<T, FakturoidError>
+    pub async fn update<T>(&self, id: i32, entity: T) -> Result<T, FakturoidError>
     where
         T: Entity + Serialize + DeserializeOwned,
     {
@@ -289,7 +289,7 @@ impl Fakturoid {
                 .patch(&self.url_with_id(T::url_part(), id))
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
                 .header("User-Agent", self.user_agent())
-                .json(entity)
+                .json(&entity)
                 .send()
                 .await?,
         )
@@ -311,7 +311,7 @@ impl Fakturoid {
         .await
     }
 
-    pub async fn create<T>(&self, entity: &T) -> Result<T, FakturoidError>
+    pub async fn create<T>(&self, entity: T) -> Result<T, FakturoidError>
     where
         T: Entity + Serialize + DeserializeOwned,
     {
@@ -320,7 +320,7 @@ impl Fakturoid {
                 .post(&format!("{}{}.json", self.url_first(), T::url_part()))
                 .basic_auth(self.user.as_str(), Some(self.password.as_str()))
                 .header("User-Agent", self.user_agent())
-                .json(entity)
+                .json(&entity)
                 .send()
                 .await?,
         )
