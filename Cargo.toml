@@ -3,6 +3,12 @@ name = "fakturoid"
 version = "0.1.0"
 authors = ["Josef Rokos <pepa@bukova.info>"]
 edition = "2018"
+description = "Client library for fakturoid.cz"
+readme = "README.md"
+repository = "https://github.com/PepaRokos/fakturoid"
+license-file = "LICENSE"
+keywords = ["fakturoid", "API_client"]
+categories = ["api-bindings"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
