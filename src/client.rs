@@ -307,11 +307,20 @@ impl Fakturoid {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
+    /// extern crate tokio;
     /// use fakturoid::models::Invoice;
-    /// let mut invoice = Invoice::default();
-    /// invoice.note = Some("Some note".to_string());
-    /// let invoice = client.update(1234, invoice).await?;
+    /// use tokio::prelude::*;
+    /// use fakturoid::client::Fakturoid;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = Fakturoid::new("user@company.com", "apicode", "slug", None);
+    ///     let mut invoice = Invoice::default();
+    ///     invoice.note = Some("Some note".to_string());
+    ///     let invoice = client.update(1234, invoice).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn update<T>(&self, id: i32, entity: T) -> Result<T, FakturoidError>
     where
@@ -350,11 +359,20 @@ impl Fakturoid {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
+    /// extern crate tokio;
     /// use fakturoid::models::Subject;
-    /// let mut subject = Subject::default();
-    /// subject.name = Some("Some company".to_string());
-    /// let subject = client.create(subject).await?;
+    /// use tokio::prelude::*;
+    /// use fakturoid::client::Fakturoid;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = Fakturoid::new("user@company.com", "apicode", "slug", None);
+    ///     let mut subject = Subject::default();
+    ///     subject.name = Some("Some company".to_string());
+    ///     let subject = client.create(subject).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn create<T>(&self, entity: T) -> Result<T, FakturoidError>
     where
@@ -378,11 +396,20 @@ impl Fakturoid {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
+    /// extern crate tokio;
     /// use fakturoid::models::Invoice;
-    /// let invoices: Invoice = client.list(None).await?;
-    /// let note = invoices.data()[0].note.clone();
-    /// let invoices = invoices.next_page().await?;
+    /// use tokio::prelude::*;
+    /// use fakturoid::client::Fakturoid;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = Fakturoid::new("user@company.com", "apicode", "slug", None);
+    ///     let invoices = client.list::<Invoice>(None).await?;
+    ///     let note = invoices.data()[0].note.clone();
+    ///     let invoices = invoices.next_page().await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn list<T>(&self, filter: Option<Filter>) -> Result<PagedResponse<T>, FakturoidError>
     where
@@ -409,11 +436,20 @@ impl Fakturoid {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
+    /// extern crate tokio;
     /// use fakturoid::models::Invoice;
-    /// let invoices: Invoice = client.fulltext("some hard work").await?;
-    /// let note = invoices.data()[0].note.clone();
-    /// let invoices = invoices.next_page().await?;
+    /// use tokio::prelude::*;
+    /// use fakturoid::client::Fakturoid;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = Fakturoid::new("user@company.com", "apicode", "slug", None);
+    ///     let invoices = client.fulltext::<Invoice>("some hard work").await?;
+    ///     let note = invoices.data()[0].note.clone();
+    ///     let invoices = invoices.next_page().await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn fulltext<T>(&self, search: &str) -> Result<PagedResponse<T>, FakturoidError>
     where
