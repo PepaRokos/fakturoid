@@ -38,6 +38,7 @@ pub(crate) struct DataErrors {
     errors: HashMap<String, Vec<String>>,
 }
 
+/// If something goes wrong this error wil bew returned.
 #[derive(Debug)]
 pub struct FakturoidError {
     kind: Kind,
@@ -47,10 +48,12 @@ pub struct FakturoidError {
 }
 
 impl FakturoidError {
+    /// Transforms this object into underlying error from reqwest library if there is any.
     pub fn into_request_err(self) -> Option<Error> {
         self.inner_request
     }
 
+    /// Transforms this object into std::error::Error.
     pub fn into_std_err(self) -> Box<dyn StdError> {
         assert!(
             self.inner_request.is_some() || self.inner_other.is_some(),
@@ -63,14 +66,19 @@ impl FakturoidError {
         }
     }
 
+    /// Error kind.
     pub fn kind(&self) -> &Kind {
         &self.kind
     }
 
+    /// If fakturoid.cz API returns JSON with errors (status 422) method transforms this object
+    /// into `HashMap` of these errors otherwise `None` will be returned.
     pub fn into_data_errors(self) -> Option<HashMap<String, Vec<String>>> {
         self.data_errors
     }
 
+    /// If fakturoid.cz API returns JSON with errors (status 422) method returns reference to
+    /// `HashMap` of these errors otherwise `None` will be returned.
     pub fn data_errors(&self) -> Option<&HashMap<String, Vec<String>>> {
         self.data_errors.as_ref()
     }

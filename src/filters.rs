@@ -2,10 +2,13 @@ use std::collections::HashMap;
 use chrono::{DateTime, Local};
 use crate::models::InvoiceState;
 
+/// Filter builder trait for implement concrete filtering.
 pub trait FilterBuilder {
+    /// Builds filter as HashMap
     fn build(&self, filter: Filter) -> HashMap<String, String>;
 }
 
+/// Common filter struct.
 #[derive(Default, Clone)]
 pub struct Filter {
     query_map: HashMap<String, String>,

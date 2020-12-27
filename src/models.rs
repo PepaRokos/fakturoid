@@ -1,3 +1,6 @@
+//! Data model. All structs and attributes coresponds with official API
+//! [documentation](https://fakturoid.docs.apiary.io)
+
 use chrono::{DateTime, Local, NaiveDate};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};

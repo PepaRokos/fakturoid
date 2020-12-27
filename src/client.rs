@@ -1,17 +1,19 @@
 use crate::error::{DataErrors, FakturoidError, UnknownError};
-use crate::filters::{Filter, FilterBuilder, InvoiceFilter, SubjectFilter, NoneFilter};
-use crate::models::{Invoice, InvoiceAction, Subject, Account};
+use crate::filters::{Filter, FilterBuilder, InvoiceFilter, NoneFilter, SubjectFilter};
+use crate::models::{Account, Invoice, InvoiceAction, Subject};
 use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
 use serde::export::Option::Some;
 use serde::Serialize;
 use std::collections::HashMap;
 
+/// Object in fakturoid.cz.
 pub trait Entity {
     fn url_part() -> &'static str;
     fn filter_builder() -> Box<dyn FilterBuilder>;
 }
 
+/// Actions on invoices.
 pub trait Action: ToString {
     fn url_part() -> &'static str;
     fn query(&self) -> HashMap<String, String>;
@@ -46,7 +48,7 @@ impl Entity for Invoice {
         Box::new(InvoiceFilter)
     }
 }
-
+/// Response from list or fulltext method.
 pub struct PagedResponse<T: Entity + DeserializeOwned> {
     collection: Vec<T>,
     client: Fakturoid,
@@ -70,30 +72,45 @@ impl<T: Entity + DeserializeOwned> PagedResponse<T> {
         }
     }
 
+    /// Reference to vector of items. There could be max 20 items.
     pub fn data(&self) -> &Vec<T> {
         &self.collection
     }
 
+    /// First page of list with more than 20 items. New instance of `PagedResponse` will be returned
+    /// in case of success, otherwise `FakturoidError` will be returned. If there is only one page
+    /// method returns the same instance.
     pub async fn first_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("first").await?)
     }
 
+    /// Previous page of list with more than 20 items. New instance of `PagedResponse` will be returned
+    /// in case of success, otherwise `FakturoidError` will be returned. If there is only one page or
+    /// we are on first page method returns the same instance.
     pub async fn prev_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("prev").await?)
     }
 
+    /// Next page of list with more than 20 items. New instance of `PagedResponse` will be returned
+    /// in case of success, otherwise `FakturoidError` will be returned. If there is only one page or
+    /// we are on last page method returns the same instance.
     pub async fn next_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("next").await?)
     }
 
+    /// Last page of list with more than 20 items. New instance of `PagedResponse` will be returned
+    /// in case of success, otherwise `FakturoidError` will be returned. If there is only one page
+    /// method returns the same instance.
     pub async fn last_page(self) -> Result<PagedResponse<T>, FakturoidError> {
         Ok(self.page("last").await?)
     }
 
+    /// True if next page exists.
     pub fn has_next(&self) -> bool {
         self.links.contains_key("next")
     }
 
+    /// True if previous page exists.
     pub fn has_prev(&self) -> bool {
         self.links.contains_key("prev")
     }
@@ -112,6 +129,7 @@ impl Action for InvoiceAction {
     }
 }
 
+/// Fakturoid client
 #[derive(Clone)]
 pub struct Fakturoid {
     user: String,
@@ -122,6 +140,8 @@ pub struct Fakturoid {
 }
 
 impl Fakturoid {
+    /// Creates new instance of client.
+    /// If user_agent is None "Rust API client (pepa@bukova.info) will be used.
     pub fn new(user: &str, password: &str, slug: &str, user_agent: Option<&str>) -> Self {
         Self {
             user: user.to_string(),
@@ -250,7 +270,8 @@ impl Fakturoid {
             Err(Self::error_response(response).await)
         }
     }
-    async fn detail_private<T>(&self, id: Option<i32>) -> Result<T, FakturoidError> where
+    async fn detail_private<T>(&self, id: Option<i32>) -> Result<T, FakturoidError>
+    where
         T: Entity + DeserializeOwned,
     {
         let url = if let Some(id) = id {
@@ -266,9 +287,10 @@ impl Fakturoid {
                 .send()
                 .await?,
         )
-            .await
+        .await
     }
 
+    /// Detail of entity with given id.
     pub async fn detail<T>(&self, id: i32) -> Result<T, FakturoidError>
     where
         T: Entity + DeserializeOwned,
@@ -276,10 +298,21 @@ impl Fakturoid {
         self.detail_private(Some(id)).await
     }
 
+    /// Account details.
     pub async fn account(&self) -> Result<Account, FakturoidError> {
         self.detail_private(None).await
     }
 
+    /// Updates entity with given id. Updated entity will be returned in case of success.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use fakturoid::models::Invoice;
+    /// let mut invoice = Invoice::default();
+    /// invoice.note = Some("Some note".to_string());
+    /// let invoice = client.update(1234, invoice).await?;
+    /// ```
     pub async fn update<T>(&self, id: i32, entity: T) -> Result<T, FakturoidError>
     where
         T: Entity + Serialize + DeserializeOwned,
@@ -296,6 +329,7 @@ impl Fakturoid {
         .await
     }
 
+    /// Deletes entity with given id.
     pub async fn delete<T>(&self, id: i32) -> Result<(), FakturoidError>
     where
         T: Entity,
@@ -311,6 +345,17 @@ impl Fakturoid {
         .await
     }
 
+    /// Creates new entity. Only mandatory fields may be filled.New entity will be returned
+    /// in case of success.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use fakturoid::models::Subject;
+    /// let mut subject = Subject::default();
+    /// subject.name = Some("Some company".to_string());
+    /// let subject = client.create(subject).await?;
+    /// ```
     pub async fn create<T>(&self, entity: T) -> Result<T, FakturoidError>
     where
         T: Entity + Serialize + DeserializeOwned,
@@ -327,6 +372,18 @@ impl Fakturoid {
         .await
     }
 
+    /// List of entities. If there is more than 20 entities first 20 will be returned as
+    /// PagedResponse object. Next pages will be accessible through methods of PagedResponse.
+    /// List can be filtered with optional given filter.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use fakturoid::models::Invoice;
+    /// let invoices: Invoice = client.list(None).await?;
+    /// let note = invoices.data()[0].note.clone();
+    /// let invoices = invoices.next_page().await?;
+    /// ```
     pub async fn list<T>(&self, filter: Option<Filter>) -> Result<PagedResponse<T>, FakturoidError>
     where
         T: Entity + DeserializeOwned,
@@ -347,6 +404,17 @@ impl Fakturoid {
         .await
     }
 
+    /// Fulltext search in entities. If there is more than 20 entities first 20 will be returned as
+    /// PagedResponse object. Next pages will be accessible through methods of PagedResponse.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use fakturoid::models::Invoice;
+    /// let invoices: Invoice = client.fulltext("some hard work").await?;
+    /// let note = invoices.data()[0].note.clone();
+    /// let invoices = invoices.next_page().await?;
+    /// ```
     pub async fn fulltext<T>(&self, search: &str) -> Result<PagedResponse<T>, FakturoidError>
     where
         T: Entity + DeserializeOwned,
@@ -362,6 +430,7 @@ impl Fakturoid {
         .await
     }
 
+    /// Fires action on entity with given id.
     pub async fn action<T: Action, D: Serialize>(
         &self,
         id: i32,
