@@ -1,3 +1,6 @@
+[![CI](https://github.com/PepaRokos/fakturoid/workflows/Rust/badge.svg)](https://github.com/PepaRokos/fakturoid/actions?query=workflow%3ARust)
+
+
 # fakturoid.cz Rust API
 
 The Rust interface to online accounting service [Fakturoid](http://fakturoid.cz/).
