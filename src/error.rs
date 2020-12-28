@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Kind {
     ServiceError,
     TooManyRequests,
@@ -13,6 +13,7 @@ pub enum Kind {
     UnprocessableEntity,
     Forbidden,
     EntityDoesNotExists,
+    Unauthorized,
     Other,
 }
 
@@ -127,6 +128,9 @@ impl From<Error> for FakturoidError {
             if status.as_u16() == 404 {
                 kind = Kind::EntityDoesNotExists;
             }
+            if status.as_u16() == 401 {
+                kind = Kind::Unauthorized;
+            }
         }
         Self {
             kind,
@@ -163,6 +167,7 @@ impl fmt::Display for FakturoidError {
             },
             Kind::Forbidden => f.write_str("Forbidden operation"),
             Kind::EntityDoesNotExists => f.write_str("Entity does not exists"),
+            Kind::Unauthorized => f.write_str("Operation is not authorized. Check credentials"),
             Kind::Other => {
                 assert!(
                     self.inner_request.is_some() || self.inner_other.is_some(),
