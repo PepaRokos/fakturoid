@@ -3,7 +3,6 @@ use crate::filters::{Filter, FilterBuilder, InvoiceFilter, NoneFilter, SubjectFi
 use crate::models::{Account, Invoice, InvoiceAction, Subject};
 use reqwest::{Client, Response};
 use serde::de::DeserializeOwned;
-use serde::export::Option::Some;
 use serde::Serialize;
 use std::collections::HashMap;
 

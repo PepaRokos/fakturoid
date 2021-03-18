@@ -1,9 +1,9 @@
 use reqwest::Error;
-use serde::export::Formatter;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
+use std::fmt::Formatter;
 
 #[derive(Debug, PartialEq)]
 pub enum Kind {
