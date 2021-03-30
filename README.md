@@ -23,7 +23,7 @@ This library is asynchronous, so you will need [Tokio](https://tokio.rs) to exec
 
 ```toml
 [dependencies]
-fakturoid = "0.1.2"
+fakturoid = "0.1.4"
 tokio = {version = "0.2", features = ["full"]}
 ```
 

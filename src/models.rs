@@ -55,7 +55,7 @@ pub struct Account {
     pub updated_at: DateTime<Local>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubjectType {
     Customer,
@@ -63,7 +63,7 @@ pub enum SubjectType {
     Both,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Subject {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<i32>,
@@ -121,7 +121,7 @@ pub struct Subject {
     pub updated_at: Option<DateTime<Local>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InvoiceState {
     Open,
@@ -143,7 +143,7 @@ impl ToString for InvoiceState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PaymentMethod {
     Bank,
@@ -153,7 +153,7 @@ pub enum PaymentMethod {
     Card,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InvoiceLanguage {
     Cz,
@@ -169,21 +169,21 @@ pub enum InvoiceLanguage {
     Ro,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VatPriceMode {
     WithoutVat,
     FromTotalWithVat,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EetStatus {
     Waiting,
     Pkp,
     Fik,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EetRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<i32>,
@@ -231,21 +231,21 @@ pub struct EetRecord {
     pub updated_at: Option<DateTime<Local>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RemoteAttachment {
     file_name: String,
     content_type: String,
     download_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Attachment {
     Update(String),
     Received(RemoteAttachment),
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Invoice {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<i32>,
@@ -362,7 +362,7 @@ pub struct Invoice {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transferred_tax_liability: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub supply_code: Option<i32>,
+    pub supply_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eu_electronic_service: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -411,7 +411,7 @@ pub struct Invoice {
     pub lines: Option<Vec<InvoiceLine>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InvoiceLine {
     pub id: Option<i32>,
     pub name: String,
